@@ -1,0 +1,933 @@
+\chapter{撮像データ解析}
+\label{chap_3}
+いよいよ撮像データの解析に入ります。やらなければいけない処理は1次処理と2次処理に分かれていて、1次処理は\ref{sec_3_1}から\ref{sec_3_6}~節、2次処理は\ref{sec_3_7}~節で扱います。
+
+\section{CCDによる出力データ}
+\label{sec_3_1}
+望遠鏡などの観測機器によって天体を観測した場合、得られるデータ、所謂「\textbf{生データ}」の内訳は
+\begin{align}
+  (\text{生データ}) =  (\text{感度ムラ}) \times \left\{  (\text{天体の真のデータ})+(\text{暗電流による雑音})+(大気による雑音) \right\}\label{eq_3_1}
+\end{align}
+となっています。
+
+「\textbf{感度ムラ}」とは検出器自体の性能に依存する量です。望遠鏡や、付属する検出器を合わせた系の天体の観測による光子検出に対する感度というのは、必ずしも一様ではありません。とても強く光子に対して反応する素子も存在する一方で、全く反応しない、「死んだ素子」も存在します。そのような非一様性を表す量が、ここで定義した「感度ムラ」という量です。また「感度ムラ」を補正することを、「\textbf{フラット}（フラット処理）」と呼びます。これについては\ref{sec_3_4}~節で解説します。
+
+「\textbf{暗電流による雑音}」とは、検出器自体の温度による雑音の量です。天体放射の検出の仕組みは大まかに
+\begin{align*}
+  (\text{天体からの光子}) \xrightarrow{\text{検出器}} (\text{光電効果による電子}) \rightarrow (\text{光電流の発生})
+\end{align*}
+となっています。この二つ目の段階で、天体放射やその他の雑音に加えて、熱雑音による電流が加わります。これを「\textbf{暗電流}」と呼びます。この雑音は単純に検出器を冷やせば減らすことができます。実際、赤外線検出器は$-76\,\mathrm{K}$、屋上望遠鏡の市販の可視光の検出器は$-10\,\mathrm{K}$に冷やして使われています。しかし、天体からの放射がわからなくなるほどの雑音の影響を軽減することはできても、完全に$0$にすることは不可能なため、この成分を引く作業が必要となります。この作業を「暗電流」が「\textbf{ダーク}」と呼ばれることから、「\textbf{ダーク引き}」と呼びます。この作業に関しては\ref{sec_3_3}~節で解説します。
+
+「\textbf{大気による雑音}」とはその名の通り、大気による雑音の成分です。今回考える主な成分は
+\begin{itemize}
+  \item 主にKバンドより長い波長で、大気や望遠鏡の熱的な放射成分を見てしまう$(\sim300\,\mathrm{K})$
+  \item 主にHバンドで、OH夜光の輝線成分によるフリンジパターン
+\end{itemize}
+です。これを以降は「\textbf{スカイ}」と呼び、スカイを引く補正のことを、「\textbf{スカイ引き}」と呼ぶことにします。スカイ引きに関しては\ref{sec_3_5}~章で解説します。
+
+式~\eqref{eq_3_1}を式変形すると
+\begin{align*}
+  (\text{生データ}) - (\text{感度ムラ})\times(\text{ダーク}) = (\text{感度ムラ})\times\left\{ (\text{天体})+(\text{スカイ}) \right\}
+\end{align*}
+となります。ダークにも感度ムラがかかっているため、生データからダークの成分を引けば、感度ムラに天体からの真の放射と、スカイの成分がかかったものが残ることになります。そこでまずは「\textbf{ダーク引き}」を行います。
+
+今回この資料で扱うデータは、2021年度5セメスター開講の講義「天体観測」の実習で用いられたデータです。データは
+\begin{verbatim}
+sample_data1
+sample_data2
+sample_data3\end{verbatim}
+に分かれていて、それぞれ
+\begin{verbatim}
+username sample_data1 % ls
+hf0001.fits	hf0002.fits\end{verbatim}
+\begin{verbatim}
+username sample_data2 % ls
+dark5.list	ir0008.fits	ir0016.fits	ir0024.fits	ir0032.fits
+ir0001.fits	ir0009.fits	ir0017.fits	ir0025.fits	ir0033.fits
+ir0002.fits	ir0010.fits	ir0018.fits	ir0026.fits	ir0034.fits
+ir0003.fits	ir0011.fits	ir0019.fits	ir0027.fits	ir0035.fits
+ir0004.fits	ir0012.fits	ir0020.fits	ir0028.fits	ir0036.fits
+ir0005.fits	ir0013.fits	ir0021.fits	ir0029.fits	ir0037.fits
+ir0006.fits	ir0014.fits	ir0022.fits	ir0030.fits	ir0038.fits
+ir0007.fits	ir0015.fits	ir0023.fits	ir0031.fits\end{verbatim}
+\begin{verbatim}
+username sample_data3 % ls
+coo.txt			dark5.fits		idfs0011.fits		result1calib.txt	skybias1.fits
+dark10.fits		flat.fits		idfs0020.fits		result2calib.txt	skybias2.fits\end{verbatim}
+となっています。
+また、sample\_data2の連番の意味については
+\begin{table}[ht]
+    \centering
+    \caption{連番データの中身}
+    \footnotesize
+    \label{tab_3_1}
+    \begin{tabular}{ccc}
+		\hline
+		\shortstack{フレーム番号} &
+		\shortstack{オブジェクト} &
+		\shortstack{積分時間（1枚あたり）}
+		\\
+		\hline
+		0001 - 0005 & dome\_flat\_off & $5\,\mathrm{s}$\\
+		0006 - 0010 & dome\_flat\_on & $5\,\mathrm{s}$\\
+		0011 - 0019 & target1 & $5\,\mathrm{s}$\\
+		0020 - 0028 & target2 & $10\,\mathrm{s}$\\
+		0029 - 0033 & dark & $5\,\mathrm{s}$\\
+		0034 - 0038 & dark & $10\,\mathrm{s}$\\
+		\hline
+	\end{tabular}
+	\normalsize
+\end{table}
+表~\ref{tab_3_1}のようになっています。このデータ群を持っていない、または、他のデータに対しての処理を行う、という場合は、お手数ではありますが、名前と階層をこのようにするか、適宜コードを変更しながら実行してください。
+
+\section{バイアス引き}
+\label{sec_3_2}
+実際の作業に入る前に、「\textbf{バイアス引き}」について解説します。バイアスとは、人為的にデータに足されている量です。これは、本来観測で得られる出力値が、不良素子の影響で負になることを防ぐために足される一定値です。この値を調べるためには、「露出$0$秒」で画像を撮れば良いことになります。しかし、これはダークの成分にも含まれているので、ダークを引けばバイアスを引いたことにもなりますから、この作業は\textbf{必要ありません}。
+
+\section{ダーク引き}
+\label{sec_3_3}
+「\textbf{ダーク}」はカメラのシャッター、または望遠鏡の蓋を閉じた状態で、\textbf{天体の露出時間と同じ時間撮影を行う}ことによって出力されるものです。まずは出力されたダークのデータから、そのままダーク画像を表示することを考えます。
+
+今回importすべきものはnumpyパッケージと、Astropyパッケージのioモジュール内のfitsモジュール、及びmatplotlibパッケージのpyplotモジュールなので、
+\begin{lstlisting}[caption=importについて,label=code_3_3_1]
+import numpy as np
+import astropy.io.fits as fits
+import matplotlib.pyplot as plt
+\end{lstlisting}
+とします。ここで、モジュールに関するエラーが出るかもしれません。これに関しては\ref{sec_app_1}~節で簡単に解説しますので、必要になれば参照してください。
+
+ダークは複数回撮ることが一般的なので、それらを全て結合する必要があります。処理としては
+\begin{lstlisting}[caption=ダーク画像の結合,label=code_3_3_2]
+dark_images = np.empty((0, 1024, 1024))
+for index in range(29, 34):
+  filename = 'ir' + str("{:04d}".format(index)) + '.fits'
+  dark = fits.getdata('sample_data2/'+filename)
+  dark_images = np.append(dark_images, dark[np.newaxis, :], axis=0)
+  median = np.median(dark)
+  stddev = np.std(dark)
+  #print(filename, median, stddev)
+
+median_dark = np.median(dark_images, axis=0)
+fits.writeto('dark5.fits', median_dark, overwrite=True)
+\end{lstlisting}
+となります。ここでは、
+\begin{enumerate}[(1)]
+  \item 1024$\times$1024$\times$0の3次元の画像を用意
+  \item 今回用意している5秒積分と10秒積分のダーク画像のうち、5秒の方の処理を行うため5秒積分のデータのナンバリング$29\sim33$まででループ
+  \begin{enumerate}[(i)]
+    \item 「filename」という変数に、今回の5秒のダーク画像の名前をstring型（文字列ということです）で格納
+    \item fitsデータの取得をastoropyのioモジュールで行う。「dark」という変数を、ディレクトリを指定してダーク画像をfitsとして読み取ったものとして定義する。
+    \item np.appendで「dark\_images」に5枚の画像のデータを出力。
+    \item 中央値や標準偏差を計算。
+  \end{enumerate}
+  \item 5つ分のデータの中央値をとり、それをダークの画像として用いる。
+\end{enumerate}
+ということを行っています。
+
+ここで一旦、結合した「dark5.fits」を出力してみることにします。素直な出力のコマンドは
+\begin{lstlisting}[caption=ダーク画像の出力,label=code_3_3_3]
+img = fits.getdata('./dark5.fits')
+plt.figure(figsize=(7, 14))
+plt.imshow(img, plt.cm.gray, origin='lower', interpolation='none')
+plt.show()
+\end{lstlisting}
+で、出力される画像が図~\ref{fig_3_1}です。
+\begin{figure}
+  \centering
+	\includegraphics[width=0.7\linewidth]{fig/chap3/dark5_fits.png}
+	\caption[ダークの結合画像：そのまま表示したもの]{ダークの結合画像：そのまま表示したもの\label{fig_3_1}}
+\end{figure}
+
+よく見ると、座標$(x,y)=(300,200)$付近や、$(800,0)$付近に明るい点が存在しています。これは数理統計で習う、正規分布に従ったノイズの成分で、よく「3$\sigma$ノイズ」だったり、「5$\sigma$ノイズ」と読んだりします。この$\sigma$は標準偏差の意味です。正規分布表と調べたりすると出てくるので、適宜調べて欲しいのですが、3$\sigma$は大体$1/1000$の確率で発生する事象ということになります。今回のダークや天体画像のピクセル数は$1024\times1024$で、$10^{6}$のオーダーなので、1枚の画像に$1000$の、リアルでないノイズが存在することになります。$5\sigma$であれば大体$1/100000$なので、$10$個くらいです。このようなノイズ成分に比較して、実際の熱雑音の成分はとても小さいので、表示の際に「真っ暗」な画像になってしまったということになります。ただし、先程の$(x,y)=(300,200)$付近や、$(800,0)$付近の明るい点が何$\sigma$のノイズなのかはわかりません。
+
+では実際のダーク成分を見るにはどのようにすれば良いかというと、値の上限、下限に制限をかければよくて、
+\begin{lstlisting}[caption=実際のダーク画像の出力,label=code_3_3_4]
+img = fits.getdata('./dark5.fits')
+plt.figure(figsize=(7, 14))
+plt.imshow(img, plt.cm.gray, vmin=median - stddev, vmax = median + stddev, origin='lower', interpolation='none')
+plt.show()
+\end{lstlisting}
+とします。ここでは、値の上限値を「中央値」$+$「標準偏差」、下限値を「中央値」$-$「標準偏差」としています。これによって出力される画像が図~\ref{fig_3_2}です。
+\begin{figure}
+  \centering
+	\includegraphics[width=0.7\linewidth]{fig/chap3/dark5_fits_2.png}
+	\caption[ダークの結合画像：$1\sigma$で制限したもの]{ダークの結合画像：$1\sigma$で制限したもの\label{fig_3_2}}
+\end{figure}
+
+一見星のように見える点と、画面を大きく割るような線が浮かび上がってきています。このダーク画像を各「生データ」から引けば良いので、その操作は
+\begin{lstlisting}[caption=生データからダークを引く処理,label=code_3_3_5]
+dark5 = fits.getdata('./dark5.fits')
+for index in range(11, 20):
+  filename = 'ir' + str("{:04d}".format(index)) + '.fits'
+  img = fits.getdata('sample_data2/'+filename)
+  dark_sub = img - dark5
+  outputname = 'd' + filename
+  #print(outputname)
+  fits.writeto(outputname, dark_sub, overwrite=True)
+\end{lstlisting}
+となります。
+\begin{enumerate}[(1)]
+  \item 作ったダーク画像を読み込み
+  \begin{enumerate}
+    \item 9枚ある生データ画像のナンバリングでループ
+    \item 「dark\_sub」を生データからダークを引いたものとする
+    \item 生データはダーク処理が行われたことになるので、処理ずみの画像を、ダーク処理ずみという意味で「d」をつけて保存
+  \end{enumerate}
+\end{enumerate}
+
+できた画像を表示させてみます。これも例によって$1\sigma$の制限をかけます。今回の天体の画像は$9$枚あったので、図~\ref{fig_3_3}のようになります。
+\begin{figure}
+  \centering
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_1.png}%
+	\label{fig_3_3_1}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_2.png}%
+  \label{fig_3_3_2}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_3.png}%
+  \label{fig_3_3_3}%
+  }
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_4.png}%
+	\label{fig_3_3_4}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_5.png}%
+  \label{fig_3_3_5}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_6.png}%
+  \label{fig_3_3_6}%
+  }
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_7.png}%
+  \label{fig_3_3_7}%
+  }%
+	\subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_8.png}%
+  \label{fig_3_3_8}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_9.png}%
+  \label{fig_3_3_9}%
+  }
+  \caption[生データからdarkを引いたもの：$1\sigma$の制限をかけたもの]{生データからdarkを引いたもの：$1\sigma$の制限をかけたもの}
+  \label{fig_3_3}
+\end{figure}
+
+また、ここまでの作業をコードとしてまとめると、次のようになります。
+\begin{lstlisting}[caption=\ref{sec_3_3}~節のまとめ,label=code_3_3_6]
+import numpy as np
+import astropy.io.fits as fits
+import matplotlib.pyplot as plt
+
+dark_images = np.empty((0, 1024, 1024))
+for index in range(29, 34):
+  filename = 'ir' + str("{:04d}".format(index)) + '.fits'
+  dark = fits.getdata('sample_data2/'+filename)
+  dark_images = np.append(dark_images, dark[np.newaxis, :], axis=0)
+  median = np.median(dark)
+  stddev = np.std(dark)
+  #print(filename, median, stddev)
+
+median_dark = np.median(dark_images, axis=0)
+fits.writeto('dark5.fits', median_dark, overwrite=True)
+
+dark5 = fits.getdata('./dark5.fits')
+for index in range(11, 20):
+  filename = 'ir' + str("{:04d}".format(index)) + '.fits'
+  img = fits.getdata('sample_data2/'+filename)
+  dark_sub = img - dark5
+  outputname = 'd' + filename
+  #print(outputname)
+  fits.writeto(outputname, dark_sub, overwrite=True)
+
+for index in range(11, 20):
+  filename = 'dir' + str("{:04d}".format(index)) + '.fits'
+  img = fits.getdata(filename)
+  median = np.median(img)
+  stddev = np.std(img)
+  plt.figure(figsize=(14, 14))
+  plt.imshow(img, plt.cm.gray, vmin=median - stddev, vmax = median + stddev, origin='lower', interpolation='none')
+  plt.show()
+\end{lstlisting}
+
+\section{フラット割り}
+\label{sec_3_4}
+次に、フラット割りの作業に入ります。現在のデータの状況は
+\begin{align*}
+  (\text{生データ}) \xrightarrow{\text{ダーク引き}} (感度ムラ)\times\left\{ (天体) + (スカイ) \right\}
+\end{align*}
+であって、フラット"割り"というのは、割り算の意味です。感度ムラを補正する画像を作って、割り算をする、ということになります。
+
+この「\textbf{フラット}」処理に必要な補正用画像の作成方法には主に次のような方法があります。
+\begin{itemize}
+  \item ドームフラット
+  \begin{itemize}
+    \item フラット盤に一様光を反射させる。
+    \item dome\_flat\_offはライトを消したもの。dome\_flat\_onはライトをつけたもの。
+    \item 精度悪め。
+    \item 天候に左右されない。
+    \item 東北大天文の屋上望遠鏡のドームにもフラット盤があるので確認してみて欲しい。
+  \end{itemize}
+  \item 雲
+  \begin{itemize}
+    \item 雲の散乱光を観測する。
+    \item 雲が一様に光っていると考え、雲の一部を観測する。
+    \item ドームフラットよりも精度が良い。
+  \end{itemize}
+  \item トワイライト
+  \begin{itemize}
+    \item 夕暮れ時、明け方に撮る。
+    \item 太陽が沈む、または昇る時の、明るすぎない時の空を観測する。
+  \end{itemize}
+\end{itemize}
+
+今回はこの中でも、処理がより簡単なドームフラットを扱うことにします。ドームフラットの工程は次の通りです。
+\begin{enumerate}[(1)]
+  \item ランプONのドームフラットの平均画像を作成する。
+  \item ランプOFFのドームフラットの平均画像を作成する。
+  \item ONからOFFを引いた画像を作成する。
+  \item この画像を規格化する。
+\end{enumerate}
+
+設定としては、ランプONとOFFの画像をそれぞれ5枚ずつ取得したとします。
+
+まずはランプONの5枚の平均画像を作ります。ダークのときと同様に、画像を結合させれば良いので、
+\begin{lstlisting}[caption=ランプONのフラット画像,label=code_3_4_1]
+light_on = np.empty((0, 1024, 1024))
+for index in range(6, 11):
+  filename = 'ir' + str("{:04d}".format(index)) + '.fits'
+  img_on = fits.getdata('./sample_data2/'+filename)
+  light_on = np.append(light_on, img_on[np.newaxis, :], axis=0)
+  median = np.median(light_on)
+  stddev = np.std(light_on)
+  #print(filename, median, stddev)
+
+median_light_on = np.median(light_on, axis=0)
+fits.writeto('light_on.fits', median_light_on, overwrite=True)
+\end{lstlisting}
+とします。
+
+\begin{enumerate}[(1)]
+  \item 「light\_on」という名前で$1024\times1024\times0$の3次元配列を作成
+  \item ランプONの画像のナンバリングは6$\sim$10なので、ループ
+  \begin{enumerate}[(i)]
+    \item 「img\_on」に、読み取ったランプONのデータを格納
+    \item 「light\_on」に付け足し
+  \end{enumerate}
+  \item それぞれの中央値をとって、それをランプONの結合画像として用いる
+\end{enumerate}
+
+できた画像が図~\ref{fig_3_4_1}です。
+\begin{figure}
+  \centering
+	\subfigure[]{%
+	\includegraphics[width=.4\textwidth,clip]{fig/chap3/flat_on.png}%
+  \label{fig_3_4_1}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.4\textwidth,clip]{fig/chap3/flat_off.png}%
+	\label{fig_3_4_2}%
+  }
+  \caption[ランプONとOFFの画像]{ランプONとOFFの画像。(a)ランプON、(b)ランプOFF。}
+  \label{fig_3_4}
+\end{figure}
+
+同様にして、ランプOFFの図が図~\ref{fig_3_4_2}のように作成できます。
+\begin{lstlisting}[caption=ランプOFFのフラット画像,label=code_3_4_2]
+light_off = np.empty((0, 1024, 1024))
+for index in range(1, 6):
+  filename = 'ir' + str("{:04d}".format(index)) + '.fits'
+  img_off = fits.getdata('./sample_data2/'+filename)
+  light_off = np.append(light_off, img_off[np.newaxis, :], axis=0)
+  median = np.median(light_off)
+  stddev = np.std(light_off)
+  #print(filename, median, stddev)
+
+median_light_off = np.median(light_off, axis=0)
+fits.writeto('light_off.fits', median_light_off, overwrite=True)
+\end{lstlisting}
+
+\begin{enumerate}[(1)]
+  \item 「light\_off」という名前で$1024\times1024\times0$の3次元配列を作成
+  \item ランプOFFの画像のナンバリングは1$\sim$5なので、ループ
+  \begin{enumerate}[(i)]
+    \item 「img\_off」に、読み取ったランプONのデータを格納
+    \item 「light\_off」に付け足し
+  \end{enumerate}
+  \item それぞれの中央値をとって、それをランプOFFの結合画像として用いる
+\end{enumerate}
+
+図~\ref{fig_3_4}を見るとわかるように、ONの画像の場合、検出器全体に一様な光を当てているのにも関わらず、非一様な模様が浮かび上がっています。また、図~\ref{fig_3_3}にも、同様の模様が浮かび上がっていることがわかります。ONからOFFを引いた画像のデータを作成し、その画像の数値で現在のデータを割れば、非一様性を解消できることがわかると思います。
+
+ONからOFFを引いた画像は次のように作成します。
+\begin{lstlisting}[caption=ONの平均画像からOFFの平均画像を引く,label=code_3_4_3]
+img_on = fits.getdata('./light_on.fits')
+img_off = fits.getdata('./light_off.fits')
+on_minus_off = img_on - img_off
+fits.writeto('flat_on_minus_off.fits', on_minus_off, overwrite=True)
+\end{lstlisting}
+
+\begin{enumerate}[(1)]
+  \item 「img\_on」としてランプON画像を読み込み
+  \item 「img\_off」としてランプOFF画像を読み込み
+  \item ONからOFFを引いたデータを作成
+  \item それをランプ画像として保存
+\end{enumerate}
+
+また、この出来上がったflat画像を規格化します。規格化について説明する前に、コード\ref{code_3_4_4}を先に示します。
+\begin{lstlisting}[caption=フラット画像の規格化,label=code_3_4_4]
+median = np.median(on_minus_off)
+stddev = np.std(on_minus_off)
+
+normarized = np.where(on_minus_off/median < 0.001, 9999, on_minus_off/median)
+fits.writeto('normalized_flat.fits', normarized, overwrite=True)
+\end{lstlisting}
+
+\begin{figure}
+  \centering
+	\includegraphics[width=0.7\linewidth]{fig/chap3/fig_flat.png}
+	\caption[作成したフラット画像]{作成したフラット画像\label{fig_3_f}}
+\end{figure}
+
+要するに規格化とは、死んだ素子を除外することです。「ONからOFFを引いた画像」で値が極端に小さくなってしまっている素子、具体的には
+\begin{verbatim}on_minus_off/median < 0.001\end{verbatim}
+であるような素子の情報は、一様に削ぎ落としてしまいたいものです。そこで、flat画像のその素子の値に$9999$という極端な値を入れてしまいます。後でデータをflatで割るのですが、極端に大きな値で割ってしまえば、その素子のデータは極端に0に限りなく近い値となって、無視できるようになるという原理です。ここで作成されたflat画像が図~\ref{fig_3_f}です。
+
+では、作成したflat画像でデータを割る作業に移ります。割るという作業も単純な演算で、
+\begin{lstlisting}[caption=フラット割り,label=code_3_4_5]
+flat = fits.getdata('normalized_flat.fits')
+for index in range(11, 20):
+  filename = 'dir' + str("{:04d}".format(index)) + '.fits'
+  flattedname = 'fdir' + str("{:04d}".format(index)) + '.fits'
+  img = fits.getdata(filename)
+  out = img / flat
+  fits.writeto(flattedname, out, overwrite=True)
+\end{lstlisting}
+となります。
+
+\begin{enumerate}
+  \item 「flat」という名前で作成したflat画像を読み込み
+  \item 処理したいデータのナンバリングは$11\sim19$なので、そこでループ
+  \begin{enumerate}
+    \item 「img」にフラット処理したいデータを格納し、「out」を処理ずみという意味で\begin{verbatim}out = img / flat\end{verbatim}と計算
+    \item 計算したデータをフラット割りの作業が完了した、という意味で「f」をつけて保存
+  \end{enumerate}
+\end{enumerate}
+
+ここまでの作業が完了したfdir画像を表示してみると図~\ref{fig_3_5}のようになります。
+\begin{figure}
+  \centering
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_flat_1.png}%
+	\label{fig_3_5_1}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_flat_2.png}%
+  \label{fig_3_5_2}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_flat_3.png}%
+  \label{fig_3_5_3}%
+  }
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_flat_4.png}%
+	\label{fig_3_5_4}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_flat_5.png}%
+  \label{fig_3_5_5}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_flat_6.png}%
+  \label{fig_3_5_6}%
+  }
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_flat_7.png}%
+  \label{fig_3_5_7}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_flat_8.png}%
+  \label{fig_3_5_8}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_raw_dark_flat_9.png}%
+  \label{fig_3_5_9}%
+  }
+  \caption[drデータををflatで割ったもの：$1\sigma$の制限をかけたもの]{drデータををflatで割ったもの：$1\sigma$の制限をかけたもの}
+  \label{fig_3_5}
+\end{figure}
+
+よくみると画像に模様のようなものがうっすらと入っています。これは次のスカイ引きの処理で取り除くものなので、ここでは問題ありません。
+
+最後に、この節で行ったフラット割りの処理のコードをまとめます。
+\begin{lstlisting}[caption=\ref{sec_3_4}~節のまとめ,label=code_3_4_6]
+light_on = np.empty((0, 1024, 1024))
+for index in range(6, 11):
+  filename = 'ir' + str("{:04d}".format(index)) + '.fits'
+  img_on = fits.getdata('./sample_data2/'+filename)
+  light_on = np.append(light_on, img_on[np.newaxis, :], axis=0)
+  median = np.median(light_on)
+  stddev = np.std(light_on)
+  #print(filename, median, stddev)
+
+median_light_on = np.median(light_on, axis=0)
+fits.writeto('light_on.fits', median_light_on, overwrite=True)
+
+light_off = np.empty((0, 1024, 1024))
+for index in range(1, 6):
+  filename = 'ir' + str("{:04d}".format(index)) + '.fits'
+  img_off = fits.getdata('./sample_data2/'+filename)
+  light_off = np.append(light_off, img_off[np.newaxis, :], axis=0)
+  median = np.median(light_off)
+  stddev = np.std(light_off)
+  #print(filename, median, stddev)
+
+median_light_off = np.median(light_off, axis=0)
+fits.writeto('light_off.fits', median_light_off, overwrite=True)
+
+img_on = fits.getdata('./light_on.fits')
+img_off = fits.getdata('./light_off.fits')
+on_minus_off = img_on - img_off
+fits.writeto('flat_on_minus_off.fits', on_minus_off, overwrite=True)
+
+median = np.median(on_minus_off)
+stddev = np.std(on_minus_off)
+
+normarized = np.where(on_minus_off/median < 0.001, 9999, on_minus_off/median)
+fits.writeto('normalized_flat.fits', normarized, overwrite=True)
+
+#plt.figure(figsize=(7, 14))
+#plt.imshow(normarized, plt.cm.gray, vmin=0.9, vmax = 1.1, origin='lower', interpolation='none')
+#plt.show()
+
+flat = fits.getdata('normalized_flat.fits')
+for index in range(11, 20):
+  filename = 'dir' + str("{:04d}".format(index)) + '.fits'
+  flattedname = 'fdir' + str("{:04d}".format(index)) + '.fits'
+  img = fits.getdata(filename)
+  out = img / flat
+  fits.writeto(flattedname, out, overwrite=True)
+\end{lstlisting}
+
+\section{スカイ引き}
+\label{sec_3_5}
+1次処理の最後はスカイ引きの処理に入ります。スカイ画像は、感度補正が終わった全ての画像を重ねて、その中央値をとれば作成できます。
+\begin{lstlisting}[caption=スカイ画像の作成,label=code_3_5_1]
+images = np.empty((0, 1024, 1024))
+for index in range(11, 20):
+  filename = 'fdir' + str("{:04d}".format(index)) + '.fits'
+  img = fits.getdata(filename)
+  images = np.append(images, img[np.newaxis, :], axis=0)
+
+sky5sec = np.median(images, axis=0)
+fits.writeto('sky5sec.fits', sky5sec, overwrite=True)
+\end{lstlisting}
+
+\begin{enumerate}
+  \item 「images」という名前で$1024\times1024\times0$の3次元配列を作成
+  \item flat処理までが終わったデータのナンバリングは$11\sim19$なので、ループ処理
+  \begin{enumerate}
+    \item 中央値をとる
+  \end{enumerate}
+  \item そのデータを「sky5sec」として保存
+\end{enumerate}
+
+できたスカイ画像が図~\ref{fig_3_6}のようになります。星が消えて、模様のようなものだけ見えています。
+\begin{figure}
+  \centering
+  \includegraphics[width=0.7\linewidth]{fig/chap3/fig_sky.png}
+  \caption[スカイ画像]{スカイ画像\label{fig_3_6}}
+\end{figure}
+
+ここでは単純に引くだけなので、
+\begin{lstlisting}[caption=スカイ引き,label=code_3_5_2]
+sky = fits.getdata('./sky5sec.fits')
+for index in range(11, 20):
+  filename = 'fdir' + str("{:04d}".format(index)) + '.fits'
+  after = 'sfdir' + str("{:04d}".format(index)) + '.fits'
+  img = fits.getdata(filename)
+  out = img - sky
+  fits.writeto(after, out, overwrite=True)
+\end{lstlisting}
+となります。ここでも例によって、「s」をつけてスカイ引き済みという意味にしています。
+
+できた画像を表示させてみます。コード的には次のようにします。
+\begin{lstlisting}[caption=作成した画像の表示,label=code_3_5_3]
+for index in range(11, 20):
+  filename = 'sfdir' + str("{:04d}".format(index)) + '.fits'
+  img = fits.getdata(filename)
+  median = np.median(img)
+  stddev = np.std(img)
+  #print(median, stddev)
+  plt.figure(figsize=(14, 14))
+  plt.imshow(img, plt.cm.gray, vmin=median - stddev, vmax = median + stddev, origin='lower', interpolation='none')
+  plt.show()
+\end{lstlisting}
+表示される画像は図~\ref{fig_3_7}です。
+\begin{figure}
+  \centering
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_sfd_1.png}%
+  \label{fig_3_7_1}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_sfd_2.png}%
+  \label{fig_3_7_2}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_sfd_3.png}%
+  \label{fig_3_7_3}%
+  }
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_sfd_4.png}%
+  \label{fig_3_7_4}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_sfd_5.png}%
+  \label{fig_3_7_5}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_sfd_6.png}%
+  \label{fig_3_7_6}%
+  }
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_sfd_7.png}%
+  \label{fig_3_7_7}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_sfd_8.png}%
+  \label{fig_3_7_8}%
+  }%
+  \subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_sfd_9.png}%
+  \label{fig_3_7_9}%
+  }
+  \caption[sky引きまでの処理が終わった画像]{sky引きまでの処理が終わった画像}
+  \label{fig_3_7}
+\end{figure}
+変な模様が消えたので、綺麗な画像になっているのがわかります。
+
+\section{天体の位置合わせ}
+\label{sec_3_6}
+1次処理の次に2次処理に入りますが、その前に天体の位置合わせをしなければなりません。画像中で同じ位置に天体が位置しているとは限りません。そこで、fits画像中のピクセル座標を「目標天体」と「標準星」のぶん、手元に書き残して置く必要があります。
+
+例として具体的に示してみましょう。図~\ref{fig_3_7}から今回の目標天体と標準星を探すことを考えます。とりあえず図~\ref{fig_3_7_1}だけを拡大表示したものが図~\ref{fig_3_8}となります。
+\begin{figure}
+  \centering
+  \includegraphics[width=0.7\linewidth]{fig/chap3/fig_sfd_1.png}
+  \caption[sky引きまでの処理が終わった画像]{sky引きまでの処理が終わった画像。今回の標準星はちょうど真ん中にいる星。\label{fig_3_8}}
+\end{figure}
+流石にこのまま天体を探すのは骨が折れるので、「DAOstarfinder\footnote{\url{https://photutils.readthedocs.io/en/stable/api/photutils.detection.DAOStarFinder.html}}」という道具を使って天体放射に印をつけます。ここから示すコードは前のコード~\ref{code_3_5_3}のfor文のスコープ内に付け足すものです。
+\begin{lstlisting}[caption=天体放射への印づけ,label=code_3_6_1]
+#for index in range(11, 20):
+  idx = (img > -100) & (img < 100)
+  mean, median, std = sigma_clipped_stats(img[idx], sigma=3.0)
+  #print((mean, median, std))
+
+  daofind = DAOStarFinder(fwhm=3.0, threshold=10.0*std)
+  sources = daofind(img)
+
+  positions = np.transpose((sources['xcentroid'], sources['ycentroid']))
+
+  apertures = CircularAperture(positions, r=9.)
+  plt.figure(figsize=(14, 14))
+  plt.imshow(img, plt.cm.gray, vmin=median - 5*std, vmax = median + 5*std, origin='lower', interpolation='none')
+  apertures.plot(color='blue', lw=3.0, alpha=1.0)
+\end{lstlisting}
+ここで行っている処理を簡単に説明すると
+\begin{enumerate}[(1)]
+  \item 画像の背景ノイズの測定
+  \begin{enumerate}[(i)]
+    \item リアルな天体放射を\begin{verbatim}idx = (img > -100) & (img < 100)\end{verbatim}として、値がこの範囲に入っているものとして天体を見つけることを考える。
+    \item 「DAOstarfinder」という道具を使って、半値半幅が$3.0$、閾値を標準偏差の$10$倍として特定、「sources」に格納
+    \item 見つけた天体の位置を「sources」を位置座標だけを転置して「positions」に格納。
+    \item これを表示
+  \end{enumerate}
+\end{enumerate}
+となります。
+
+こうして得られる画像が図~\ref{fig_3_9}です。
+\begin{figure}
+	\centering
+	\subfigure[]{%
+  \includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_dsfd_1.png}%
+	\label{fig_3_9_1}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_dsfd_2.png}%
+	\label{fig_3_9_2}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_dsfd_3.png}%
+	\label{fig_3_9_3}%
+	}
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_dsfd_4.png}%
+	\label{fig_3_9_4}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_dsfd_5.png}%
+	\label{fig_3_9_5}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_dsfd_6.png}%
+	\label{fig_3_9_6}%
+	}
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_dsfd_7.png}%
+	\label{fig_3_9_7}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_dsfd_8.png}%
+	\label{fig_3_9_8}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{fig/chap3/fig_dsfd_9.png}%
+	\label{fig_3_9_9}%
+	}
+	\caption[見つけた星の表示]{見つけた星の表示}
+	\label{fig_3_9}
+\end{figure}
+先程と同様に、図~\ref{fig_3_9_1}だけに注目したものが図~\ref{fig_3_10}となる。
+\begin{figure}
+	\centering
+	\includegraphics[width=0.7\linewidth]{fig/chap3/fig_dsfd_1.png}
+	\caption[星に印をつけた画像]{星に印をつけた画像。今回の標準星はちょうど真ん中にいる星。\label{fig_3_10}}
+\end{figure}
+
+星を見つけるといっても、結局は地道に目当ての天体の大体の座標を指定して、その範囲内にある星の明るさを測る、ということになります\footnote{印をつけたにしても、相変わらず骨の折れる作業となっていますが、仕方が無いとしか言いようがありません。青い印がどのように配置されているか、というパターンから見つけ出す感じです。}。今回の測光の対象天体は図~\ref{fig_3_10}で言えば、
+\begin{align*}
+	(x,y) = (350,595)
+\end{align*}
+あたりにいる天体で、その明るさの基準となる標準星は
+\begin{align*}
+	(x,y) = (500,500)
+\end{align*}
+あたりのちょうど真ん中にいる星となります。このように、扱う全ての星について座標を指定すると、次のようになります。ただし、のちの作業の都合上、その範囲内に他の天体が映らないような、座標値の範囲を指定しています。この例のように、あらかじめ配列として作っておくと便利です。注意としては、この定義はfor文の前に書いておくものとなります。
+
+\begin{lstlisting}[caption=天体の存在範囲の指定,label=code_3_6_2]
+#target star
+xytlm = [[325,400,560,605],#[x_low, x_high, y_low, y_high]
+         [590,650,550,625],
+         [590,650,280,340],
+         [300,390,200,340],
+         [50,125,290,340],
+         [50,125,550,625],
+         [50,125,820,880],
+         [325,400,820,880],
+         [600,650,820,870]]
+
+#standard star
+xyslm = [[470,550,480,540],#[x_low, x_high, y_low, y_high]
+         [750,800,475,550],
+         [750,810,210,270],
+         [475,550,220,280],
+         [210,280,220,270],
+         [225,280,475,550],
+         [225,290,740,800],
+         [475,550,740,800],
+         [750,800,740,800]]
+\end{lstlisting}
+
+\section{測光}
+\label{sec_3_7}
+いよいよ2次処理として測光の作業に入ります。\ref{sec_3_6}~節ですでに画像を読み込み、DAOstarfinderで見つけた天体に印が付いているものとします。先程はこの道具で天体を見つけ、その座標を取り囲むように適当に円形の印をつけました。今回は\red{開口測光}という手法を使うので、改めて円形の印を定義して、その範囲内のフラックスの値で星の明るさを評価することを考えます。ただし、この方法は見かけの天体同士の距離が十分に離れていなければならないという制限がつくので、そうでない場合はまた別の方法を使わなければなりません。
+
+開口測光では、まず天体の周りを極力隙間の無いように円で囲みます。今回は半径を$r=5.0$としましょう。
+\begin{lstlisting}[caption=開口測光の準備,label=code_3_7_1]
+#for index in range(11, 20):
+  apertures = CircularAperture(positions, r=5.)
+  rawflux = aperture_photometry(img - median, apertures)
+\end{lstlisting}
+これは\ref{code_3_5_3}と\ref{code_3_6_1}のfor文内に続きとして書かれているものとします。
+\begin{itemize}
+  \item DAOstarfinderで定義したpositionsについて、円環の内側の円を定義。
+  \item 内部のフラックスを測る。
+\end{itemize}
+
+ここで内部のフラックスを測りましたが、この放射には天体由来の放射だけでなく、その背景の放射も含まれています。この問題を解決するためには、背景の放射をどこかに定義して、いま測ったフラックスから引けば良いことになります。そこで、背景として天体の近傍に天体を取り囲むような円環を定義し、その放射を背景放射と解釈することとします。具体的には図~\ref{fig_3_11}のような円環を星の周りに定義する事になります。
+\begin{figure}
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/chap3/Unknown.pdf}
+  \caption[開口測光で定義した印]{開口測光で定義した印\label{fig_3_11}}
+\end{figure}
+\begin{lstlisting}[caption=開口測光の背景放射の定義,label=code_3_7_2]
+  annulus_apertures = CircularAnnulus(positions, r_in=10., r_out=15.)
+\end{lstlisting}
+これも\ref{code_3_7_1}と同様にfor文の続きです。作成された円環の様子を見てみましょう。
+\begin{lstlisting}[caption=開口測光で作成した円環の様子,label=code_3_7_3]
+#for index in range(11, 20):
+  plt.figure(figsize=(14, 14))
+  plt.imshow(img, plt.cm.gray, vmin=median - 5*std, vmax=median + 5*std, origin='lower', interpolation='none')
+  apertures.plot(color='blue', lw=3)
+  annulus_apertures.plot(color='red', lw=3)
+
+  plt.xlim(xylm[index-11][0], xylm[index-11][1])
+  plt.ylim(xylm[index-11][2], xylm[index-11][3])
+\end{lstlisting}
+これは図~\ref{fig_3_12}のようになります。
+\begin{figure}
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/chap3/fig_dsfd_1_f.png}
+  \caption[目標天体と標準星の測光]{目標天体と標準星の測光。左上が目標天体で、右下が標準星。\label{fig_3_12}}
+\end{figure}
+
+ただし、ここでxylmとしている配列は、今回の目標天体が表示の対象になるように自分で定義した座標値で、
+\begin{screen}
+\begin{verbatim}
+xylm = [[300,550,450,605], #[x_low, x_high, y_low, y_high]
+        [560,840,450,650],
+        [570,840,200,360],
+        [320,550,200,360],
+        [40,290,180,360],
+        [30,290,450,640],
+        [40,290,730,890],
+        [330,550,730,900],
+        [560,840,730,870]]\end{verbatim}
+\end{screen}
+と置いている。
+
+次に、円環の内部に近くからの天体の放射の含まれた画素が存在しないことを確認するために、単純に円環内の平均値を取るのではなく、各円環内の中央値をシグマクリッピングして計算することを考える。
+\begin{screen}
+\begin{verbatim}
+#これを行うために、わっか内のピクセルの位置に1を、わっか外のピクセルの
+位置に0を含むマスクのセットを作成。
+#次に、マスクをループして、それぞれのマスクにデータを掛け、0よりも大き
+いピクセル、つまりわっかの内側にあるピクセルだけを選択します。
+#そして，わっか内のピクセルのシグマクリッピングされた中央値を計算し，そ
+れを新しい配列に保存。
+#for index in range(11, 20): の中に続きとして書く。
+
+annulus_masks = annulus_apertures.to_mask(method='center')
+bkg_median = []
+for mask in annulus_masks:
+    annulus_data = mask.multiply(img)
+    annulus_data_1d = annulus_data[mask.data > 0]
+    _, median_sigclip, _ = sigma_clipped_stats(annulus_data_1d)
+    bkg_median.append(median_sigclip)
+
+#print(bkg_median)
+bkg_median = np.array(bkg_median)
+#print(bkg_median)\end{verbatim}
+\end{screen}
+
+おまじないのようになってしまったが、このようにすれば目的は満たすことができる。
+
+背景の放射がここまでで定義できたので、真の天体放射のフラックスを取り出すことができる。
+\begin{screen}
+\begin{verbatim}
+#for index in range(11, 20): の中に続きとして書く。
+#天体放射のフラックス
+rawflux['annulus_median'] = bkg_median
+print(rawflux['annulus_median'])
+#print(rawflux)
+
+#背景放射のフラックス
+rawflux['aper_bkg'] = bkg_median*apertures.area
+print(rawflux['aper_bkg'])
+
+#真の天体放射のフラックス
+rawflux['final_phot'] = rawflux['aperture_sum'] - rawflux['aper_bkg']
+#print(rawflux['final_phot'])\end{verbatim}
+\end{screen}
+
+
+次に、目標天体と、標準星の位置を測定する。
+\begin{screen}
+\small{
+\begin{verbatim}
+#目標天体
+tdx = (rawflux['xcenter'] > xytlm[index-11][0]*u.pix) &
+    (rawflux['xcenter'] < xytlm[index-11][1]*u.pix) & (rawflux['ycenter'] >
+    xytlm[index-11][2]*u.pix) & (rawflux['ycenter'] <
+    xytlm[index-11][3]*u.pix)
+
+#標準星
+idx = (rawflux['xcenter'] > xyslm[index-11][0]*u.pix) &
+    (rawflux['xcenter'] < xyslm[index-11][1]*u.pix) & (rawflux['ycenter'] >
+    xyslm[index-11][2]*u.pix) & (rawflux['ycenter'] <
+    xyslm[index-11][3]*u.pix)\end{verbatim}
+}
+\end{screen}
+
+次に、等級の定義に従ってフラックスから等級を算出する。
+\begin{screen}
+\small{
+\begin{verbatim}
+constant = 11.082 + 2.5*np.log10((rawflux['final_phot'])[idx])
+
+    # 積分時間で割って、単位時間で考えるのを忘れずに。
+    rawflux['magtmp'] = -2.5*np.log10((rawflux['final_phot'])/5.0)
+
+    # 標準星を使って、constantを求める
+    #print((rawflux['magtmp'])[idx])
+    constant = 11.082 - (rawflux['magtmp'])[idx]
+    #print(constant)
+    # 較正した等級を求める
+    rawflux['mag'] = rawflux['magtmp'] + constant\end{verbatim}
+}
+\end{screen}
+これにより、今回の場合等級が9個算出される。次に、エラーを用いて重みづけ平均する。
+\begin{screen}
+\small{
+\begin{verbatim}
+gain = 4.5 # electrons/ADU
+S = gain*rawflux['final_phot'] # electrons
+Nsky = gain*rawflux['aper_bkg'] # electrons
+Nrnoise = apertures.area*7.0*7.0 # electrons
+Noise = np.sqrt(S + Nsky + Nrnoise)
+rawflux['signal_to_noise_ratio'] = S/Noise
+rawflux['merr'] = (1.0857)/(S/Noise)
+rawflux['merr'] = (1.0857)/rawflux['signal_to_noise_ratio']
+#print(rawflux['signal_to_noise_ratio'])
+#print(rawflux['merr'])
+#print((rawflux['mag'])[tdx], (rawflux['merr'])[tdx])\end{verbatim}
+}
+\end{screen}
+算出された等級とエラーが
+\begin{screen}
+\small{
+\begin{verbatim}
+mag_sokutei = np.array([13.562787057595326,
+                        13.352608195200293,
+                        13.302391414114162,
+                        13.465924498480856,
+                        13.474421997160142,
+                        13.49424568461201,
+                        13.776017771101575,
+                        13.639090013207062,
+                        13.344545259085724])
+err_sokutrei = np.array([0.006542723187094467,
+                         0.0051607348764517455,
+                         0.0048882303893935134,
+                         0.005813941600634736,
+                         0.005854061979712406,
+                         0.006027165575609344,
+                         0.008185817310447973,
+                         0.006751653291618628,
+                         0.0051235157715500195])\end{verbatim}
+}
+\end{screen}
+であった場合、
+\begin{screen}
+\begin{verbatim}
+mag_best_bunsi = np.sum((mag_sokutei)/(err_sokutrei)/(err_sokutrei))
+mag_best_bunbo = np.sum(1.0/(err_sokutrei)/(err_sokutrei))
+
+mag_best = mag_best_bunsi/mag_best_bunbo
+
+print(mag_best)
+\end{verbatim}
+\end{screen}
+とすれば良い。今回は
+\begin{verbatim}
+13.450751883295252\end{verbatim}
+となった。
+
+    \section*{まとめ}
+    \addcontentsline{toc}{section}{まとめ} % 目次に載せる

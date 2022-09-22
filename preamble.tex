@@ -1,0 +1,178 @@
+\setlength{\textwidth}{\fullwidth}
+\setlength{\evensidemargin}{\oddsidemargin}
+\addtolength{\textwidth}{-5truemm}
+\addtolength{\oddsidemargin}{5truemm}
+
+%package類
+%%%%%%%%%%%%%%%%%%%%
+\usepackage[utf8]{inputenc} % エンコーディングが UTF8 であることを明示する。
+%文書内リンク
+% OTF フォントを使えるようにし、複数のウェイトも使用可能にする。
+% これがないと、Mac のヒラギノ環境で使われる角ゴが太すぎてみっともない。
+%\usepackage[deluxe]{otf}
+
+% OT1→T1に変更し、ウムラウトなどを PDF 出力で合成文字ではなくす
+\usepackage[T1]{fontenc}
+
+% uplatex の場合に必要な処理
+\usepackage[prefernoncjk]{pxcjkcat} % アクセントつきラテン文字を欧文扱いにする
+
+% Helvetica と Times を sf と rm のそれぞれで使う。
+% default だとバランスが悪いので、日本語に合わせて文字の大きさを調整する。
+\usepackage[scaled=1.05,helvratio=0.95]{newtxtext}
+
+% 色
+\usepackage[dvipdfmx]{color}
+\usepackage[colorlinks=true,allcolors=blue]{hyperref}
+\usepackage{pxjahyper}%文字化け防止
+
+\usepackage{array,amsmath,amssymb,bm,cases}%数式でよく使うもの
+
+\usepackage[dvipdfmx]{graphicx}%画像使用
+
+\usepackage{url}
+
+\usepackage{natbib}
+
+\usepackage{ascmac}%itembox環境
+
+\usepackage{enumerate}%enumerate環境
+
+% bibliography を目次に追加
+\usepackage[nottoc,notlot,notlof]{tocbibind}
+
+%\usepackage{mathtools}%dcases環境
+
+\usepackage[nooneline]{subfigure}
+\subfiguretopcaptrue
+
+%\usepackage{comment}
+
+\allowdisplaybreaks[4] % 数式がページをまたがることを許す
+
+\usepackage{listings,jvlisting} %日本語のコメントアウトをする場合jvlisting（もしくはjlisting）が必要
+%ここからソースコードの表示に関する設定
+\lstset{
+  basicstyle={\ttfamily},
+  identifierstyle={\small},
+  commentstyle={\smallitshape},
+  keywordstyle={\small\bfseries},
+  ndkeywordstyle={\small},
+  stringstyle={\small\ttfamily},
+  frame={tb},
+  breaklines=true,
+  columns=[l]{fullflexible},
+  numbers=left,
+  xrightmargin=0zw,
+  xleftmargin=3zw,
+  numberstyle={\scriptsize},
+  stepnumber=1,
+  numbersep=1zw,
+  lineskip=-0.5ex
+}
+%ここまでソースコードの表示に関する設定
+
+% latexdiff
+% 実際の修論には入れる必要なし
+%DIF PREAMBLE EXTENSION ADDED BY LATEXDIFF
+%DIF UNDERLINE PREAMBLE %DIF PREAMBLE
+\RequirePackage[normalem]{ulem} %DIF PREAMBLE
+\RequirePackage{color}\definecolor{RED}{rgb}{1,0,0}\definecolor{BLUE}{rgb}{0,0,1} %DIF PREAMBLE
+\providecommand{\MyDIFadd}[1]{{\protect\color{blue}\uwave{#1}}} %DIF PREAMBLE
+\providecommand{\MyDIFdel}[1]{{\protect\color{red}\sout{#1}}}                      %DIF PREAMBLE
+%DIF SAFE PREAMBLE %DIF PREAMBLE
+\providecommand{\MyDIFaddbegin}{} %DIF PREAMBLE
+\providecommand{\MyDIFaddend}{} %DIF PREAMBLE
+\providecommand{\MyDIFdelbegin}{} %DIF PREAMBLE
+\providecommand{\MyDIFdelend}{} %DIF PREAMBLE
+%DIF FLOATSAFE PREAMBLE %DIF PREAMBLE
+\providecommand{\MyDIFaddFL}[1]{\MyDIFadd{#1}} %DIF PREAMBLE
+\providecommand{\MyDIFdelFL}[1]{\MyDIFdel{#1}} %DIF PREAMBLE
+\providecommand{\MyDIFaddbeginFL}{} %DIF PREAMBLE
+\providecommand{\MyDIFaddendFL}{} %DIF PREAMBLE
+\providecommand{\MyDIFdelbeginFL}{} %DIF PREAMBLE
+\providecommand{\MyDIFdelendFL}{} %DIF PREAMBLE
+%DIF END PREAMBLE EXTENSION ADDED BY LATEXDIFF
+
+
+%%%%%%%%%%%%%%%%%%%%
+
+%newcommand類
+%%%%%%%%%%%%%%%%%%%%
+\newcommand{\bs}{\symbol{92}} %backslash
+
+\newcommand{\red}[1]{\textcolor{red}{#1}} %文字色赤
+
+\newcommand{\blue}[1]{\textcolor{blue}{#1}} %文字色青
+
+\newcommand{\green}[1]{\textcolor{green}{#1}} %文字色緑
+
+\newcommand{\ured}[1]{\textcolor{red}{\underline{\textcolor{black}{#1}}}} %下線赤
+
+\newcommand{\ugreen}[1]{\textcolor{green}{\underline{\textcolor{black}{#1}}}} %下線緑
+
+\newcommand{\ublue}[1]{\textcolor{blue}{\underline{\textcolor{black}{#1}}}} %下線青
+%%%%%%%%%%%%%%%%%%%%
+
+\makeatletter
+
+\def\seireki#1{\def\@seireki{#1}} % 西暦での年度
+\def\supervisor#1{\def\@supervisor{#1}} % 担当教員
+\def\SyozokuUniv#1{\def\@SyozokuUniv{#1}} %所属大学
+\def\SyozokuGakubu#1{\def\@SyozokuGakubu{#1}} %所属学部
+\def\SyozokuGakka#1{\def\@SyozokuGakka{#1}} %所属学科
+\def\StudentIdNumber#1{\def\@StudentIdNumber{#1}} % 学籍番号
+\def\subject#1{\def\@subject{#1}} %教科名
+
+\renewcommand{\maketitle}{%
+  \begin{titlepage}%
+    \let\footnotesize\small
+    \let\footnoterule\relax
+    \let\footnote\thanks
+    \null\vfil
+    \vskip 20\p@
+    \begin{center}%
+      {\Large もし天{\@seireki}年度版 \par}%
+      \vskip 12em%
+      {\LARGE \@title \par}%
+      \vskip 15em%
+      {\large
+        \begin{tabular}[t]{c}%
+          \@SyozokuUniv 天文学教室
+        \end{tabular}\par}%
+      \vskip 5em%
+      {\large
+        \begin{tabular}[t]{c}%
+            {\Large \@author}
+        \end{tabular}\par}%
+      \vskip 1.5em
+      {\large \@date \par}%
+    \end{center}%
+    \par
+    \@thanks\vfil\null
+  \end{titlepage}%
+  \setcounter{footnote}{0}%
+  \global\let\thanks\relax
+  \global\let\maketitle\relax
+  \global\let\@thanks\@empty
+  \global\let\@author\@empty
+  \global\let\@date\@empty
+  \global\let\@title\@empty
+  \global\let\title\relax
+  \global\let\author\relax
+  \global\let\date\relax
+  \global\let\and\relax
+}%
+
+\makeatother
+
+%%ここからを自分で書く
+%%%%%%%%
+\title{天文データ解析概論}
+\date{\today} %日付
+\seireki{2021} %年度
+\author{天文B3\,SLA一同} %名前
+
+\SyozokuUniv{東北大学} %所属大学
+%%%%%%%%
+%%ここまでを自分で書く
