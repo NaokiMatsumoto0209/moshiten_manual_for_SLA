@@ -12,7 +12,23 @@
 \renewcommand{\thetable}{\Alph{section}.\arabic{table}}
 
 \section{プログラミング環境の構築}
+もし天に限らず、データ解析にはプログラミングが必須となりますが、まず環境がなければ解析を行うことはできません。ひと口にプログラミングと言っても、様々な言語が存在し、それぞれに特色があります。例えばPythonの実行環境にはAnaconda社提供の「Anaconda」\footnote{\url{https://www.anaconda.com/products/individual}}やGoogle社提供の「Google Colaboratory」\footnote{\url{https://colab.research.google.com}}などの有名なものがありますが、ここでは統合開発環境をおすすめしたいと思います。AnacondaやGoogle ColaboratoryはPythonに特化した環境になっていますが、統合開発環境は自分で拡張機能を追加することによって、自分好みのスタイルでPythonだけでなく、C/C++やHTML/CSS、 \LaTeX などの様々な言語を扱うことができるものです。統合開発環境にも同じく様々なものがありますが、その中でも特に有名と言える、Microsoft社提供の「Visual Studio Code」通称「VSCode」\footnote{\url{https://code.visualstudio.com/}}をおすすめします。VSCodeは2015年が最初のリリースと、非常に新しいエディタですが、さすがMicrosoftというべきか、今では非常に多くの人に使われています。個人的にはGithub社提供の「Atom」という統合開発環境が好きでずっと使っていたのですが、Github社がMicrosoft社に買収された影響もあって、2022年の12月で開発終了にまで追い込まれてしまいました。
 
+\subsection{VSCodeのインストール}
+まずはインストールしてみましょう。
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=0.7\linewidth]{./fig/appendix/vscode_install.png}
+	\caption{VSCodeのインストール画面}
+	\label{fig:vscode_install}
+\end{figure}
+脚注のURLで検索すると、インストール画面が出てきます。図~\ref{fig:vscode_install}がその画面です。どういう仕組みなのかはわからないのですが、自分のPC環境にあったVSCodeのバージョンが「Code editing. Redefined.」の下に出ているはずです。私の環境はintelチップのMacなのでこの表示になっていますが、自分のPC環境に本当に合っているのかどうか確かめてからインストールしましょう。Macではない場合は異なる表示になっていると思います。\par
+ダウンロードが終わるとダウンロードフォルダに\texttt{VSCode-darwin-universal.zip}みたいなzipファイルがあるはずです。これをクリックするとVSCodeというアプリケーションが解凍されます。これをアプリケーションフォルダに移動すれば、インストール完了です。
+
+\subsection{各種設定}
+次に、使用に便利な一般の拡張機能を入れてみましょう。ブラウザで「VSCode 拡張機能 おすすめ」とか調べるととても参考になる記事が多いですが、そんな中から筆者が実際に使っているものをピックアップしていくつか紹介します。
+
+\subsubsection{vscode-icons}
 
 \section{Python実行環境の構築}
 
