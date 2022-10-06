@@ -41,7 +41,7 @@ CCDカメラなどの検出機は、多数の素子によって構成されて�
   https://drive.google.com/drive/folders/1ZGkWFySTgc-MVdViP_U_AfD8XPUrSbWi
 \end{verbatim}
 
-中身は次のようになっています。
+中身は次のようになっています。\texttt{raw}が天体を撮像した生データ、\texttt{flat}がフラットフィールディングに用いるデータ、\texttt{dark}がダーク引きで用いるデータです。
 \begin{verbatim}
   dark % ls
   ir0029.fits   ir0030.fits   ir0031.fits   ir0032.fits   ir0033.fits
@@ -51,6 +51,230 @@ CCDカメラなどの検出機は、多数の素子によって構成されて�
   ir0011.fits   ir0012.fits   ir0013.fits   ir0014.fits   ir0015.fits
   ir0016.fits   ir0017.fits   ir0018.fits   ir0019.fits
 \end{verbatim}
+
+また、解析コードとして\texttt{initial\_data\_reduction.py}と\texttt{photometry.py}が付属しています。まずは\texttt{initial\_data\_reduction.py}の内容を扱います。\par
+解析にさきだって、今回扱う生データを見てみましょう。
+\begin{figure}
+	\centering
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_ir_00.pdf}%
+	\label{fig:raw_figs_0}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_ir_01.pdf}%
+	\label{fig:raw_figs_1}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_ir_02.pdf}%
+	\label{fig:raw_figs_2}%
+	}
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_ir_03.pdf}%
+	\label{fig:raw_figs_3}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_ir_04.pdf}%
+	\label{fig:raw_figs_4}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_ir_05.pdf}%
+	\label{fig:raw_figs_5}%
+	}
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_ir_06.pdf}%
+	\label{fig:raw_figs_6}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_ir_07.pdf}%
+	\label{fig:raw_figs_7}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_ir_08.pdf}%
+	\label{fig:raw_figs_8}%
+	}
+	\caption{生データ画像}
+	\label{fig:raw_data}
+\end{figure}
+星のようなものが写ってはいますが、あまり綺麗とは言えない状態です。これは先ほど述べた様々な雑音などの成分の影響を受けているためです。これから行う処理によって綺麗な画像にしていきます。
+
+\subsubsection{コードの実行の仕方}
+ここではPythonやその他言語の扱いに慣れていない方のために、Pythonのコード実行の仕方を説明します。慣れている方はそのまま読み飛ばしてください。
+
+\subsubsection{バイアス引き}
+実際の作業に入る前に、「\textbf{バイアス引き}」について解説します。バイアスとは、人為的にデータに足されている量です。これは、本来観測で得られる出力値が、不良素子の影響で負になることを防ぐために足される一定値です。この値を調べるためには、「露出$0$秒」で画像を撮れば良いことになります。しかし、これはダークの成分にも含まれているので、ダークを引けばバイアスを引いたことにもなりますから、この作業は\textbf{必要ありません}。
+
+\subsubsection{ダーク引き}
+「\textbf{ダーク}」はカメラのシャッター、または望遠鏡の蓋を閉じた状態で、\textbf{天体の露出時間と同じ時間撮影を行う}ことによって出力されるものです。実際、ダークがどんな画像なのかをみてみましょう。\par
+まずは準備として、必要なモジュールをimportします。次のコードを実行してください。
+\begin{lstlisting}[caption=モジュールのimport, label=code:import]
+  import os
+  import numpy as np
+  import astropy.io.fits as fits
+  import glob
+  import aplpy
+
+  # create a directory if that directory does not exist
+  def my_makedirs(path):
+      if not os.path.isdir(path):
+          os.makedirs(path)
+
+  my_makedirs('./out')
+\end{lstlisting}
+\texttt{import}から始まる文が今回の1次処理で使用するモジュール類です。また、引数として取った文字列を名前として持つディレクトリが存在しない場合に、ディレクトリを作成する関数\texttt{my\_makedirs}を作り、\texttt{out}というディレクトリを作成しました。これから出力される\texttt{.fits}ファイルは全てここに保存するようにします。\par
+次にダーク画像を作成します。ダークは複数回撮ることが一般的なので、それらを全て結合する必要があります。今回は5枚とってあるので、それらを結合します。処理としては次のようになります。
+\begin{lstlisting}[caption=ダーク画像の作成, label=code:mk_dark]
+  # dark
+  ## merge the dark images
+  dark_images = np.empty((0, 1024, 1024))
+  dark_fits = glob.glob('./dark/*.fits')
+  for data in dark_fits:
+      dark = fits.getdata(data)
+      dark_images = np.append(dark_images, dark[np.newaxis, :], axis=0)
+
+  median_dark = np.median(dark_images, axis=0)
+  fits.writeto('./out/dark.fits', median_dark, overwrite=True)
+\end{lstlisting}
+ここでの流れは次のようになっています。
+\begin{enumerate}[(1)]
+  \item 1024$\times$1024$\times$0の3次元の画像を用意
+  \item 今回扱うダークの\texttt{fits}を全て取得
+  \item 取得したダーク\texttt{fits}でループ処理
+  \begin{itemize}
+    \item データを一つずつ取得してその中央値をとる
+  \end{itemize}
+  \item できた画像を保存
+\end{enumerate}
+
+できた\texttt{fits}形式のファイルを表示してみます。下のコードを実行すると、図~\ref{fig:dark}が\texttt{fig}というフォルダの中にあるはずです。
+\begin{lstlisting}[caption=ダーク画像の表示, label=code:dark]
+  my_makedirs('./fig')
+
+  img = fits.open('./out/dark.fits')
+  pic = aplpy.FITSFigure(img)
+  pic.show_grayscale()
+  pic.save('./fig/dark_fits.pdf')
+\end{lstlisting}
+\begin{figure}
+  \centering
+	\includegraphics[width=0.6\linewidth]{./fig/chap_5/dark_fits.pdf}
+	\caption{ダークの結合画像}
+  \label{fig:dark}
+\end{figure}
+
+明るい点が複数個確認できると思います。これは数理統計で習う、正規分布に従ったノイズの成分で、よく「3$\sigma$ノイズ」だったり、「5$\sigma$ノイズ」と読んだりします。この$\sigma$は標準偏差の意味です。正規分布表と調べたりすると出てくるので、適宜調べて欲しいのですが、3$\sigma$は大体$1/1000$の確率で発生する事象ということになります。今回のダークや天体画像のピクセル数は$1024\times1024$で、$10^{6}$のオーダーなので、1枚の画像に$1000$の、リアルでないノイズが存在することになります。$5\sigma$であれば大体$1/100000$なので、$10$個くらいです。\par
+この\textbf{ダーク}を\textbf{生データ}から引きます。
+\begin{lstlisting}[caption=生データからダークを引く, label=code:darkhiki]
+  ## subtract the dark data from raw data
+  dark = fits.getdata('./out/dark.fits')
+  raw_fits = glob.glob('./raw/*.fits')
+  for i,data in enumerate(raw_fits):
+      raw_image = fits.getdata(data)
+      sub_dark = raw_image - dark
+      file_name = 'dir_' + str('{:02d}'.format(i)) + '.fits'
+      fits.writeto('./out/' + file_name, sub_dark, overwrite=True)
+\end{lstlisting}
+これによって、ダークによって生まれてしまう成分をデータから引くことができたことになり、式~\eqref{eq:nama_data}的に言えば、これで得られる画像は
+\begin{align}
+  (\text{感度の違い}) \times \left\{  (\text{真の天体信号})+(夜光などの雑音) \right\}\label{eq:dir_data}
+\end{align}
+となっているはずです。ここで注意しなければならないのは、ダークにも検出機の素子の感度の違いがのってしまっていることです。できた画像を表示してみます。
+\begin{lstlisting}[caption=ダーク引き済み画像の表示, label=code:darked_fig]
+  dir_images = glob.glob('./out/dir_*.fits')
+  for i,data in enumerate(dir_images):
+      img = fits.open(data)
+      pic = aplpy.FITSFigure(img)
+      pic.add_grid()
+      pic.grid.set_color('white')
+      pic.grid.set_alpha(0.8)
+      pic.grid.set_linestyle('solid')
+      pic.grid.set_linewidth(1)
+      pic.show_grayscale()
+      img_name = 'fig_dir_' + str('{:02d}'.format(i)) + '.pdf'
+      pic.save('./fig/' + img_name)
+\end{lstlisting}
+このコードによって作成される画像が図~\ref{fig:darked_figs}です。
+\begin{figure}
+	\centering
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_dir_00.pdf}%
+	\label{fig:darked_figs_0}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_dir_01.pdf}%
+	\label{fig:darked_figs_1}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_dir_02.pdf}%
+	\label{fig:darked_figs_2}%
+	}
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_dir_03.pdf}%
+	\label{fig:darked_figs_3}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_dir_04.pdf}%
+	\label{fig:darked_figs_4}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_dir_05.pdf}%
+	\label{fig:darked_figs_5}%
+	}
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_dir_06.pdf}%
+	\label{fig:darked_figs_6}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_dir_07.pdf}%
+	\label{fig:darked_figs_7}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_dir_08.pdf}%
+	\label{fig:darked_figs_8}%
+	}
+	\caption{ダーク引き済みの画像}
+	\label{fig:darked_figs}
+\end{figure}
+正直あまり変わった気がしないと思います。これは、十分に冷やされた検出機を使っている場合、熱雑音の成分が目に見えるほど、画像内で支配的になることはないためです。
+
+\subsubsection{フラットフィールディング}
+次に、フラットフィールディングの作業に入ります。フラット割りとも言います。現在のデータの状況は
+\begin{align*}
+  (\text{生データ}) \xrightarrow{\text{ダーク引き}} (感度の違い)\times\left\{ (真の天体信号) + (夜光などの雑音) \right\}
+\end{align*}
+であって、フラット"割り"というのは、割り算の意味です。感度の違いを補正する画像を作って、割り算をする、ということになります。\par
+この「\textbf{フラット}」処理に必要な補正用画像の作成方法には主に次のような方法があります。
+\begin{itemize}
+  \item ドームフラット
+  \begin{itemize}
+    \item フラット盤に一様光を反射させる。
+    \item dome\_flat\_offはライトを消したもの。dome\_flat\_onはライトをつけたもの。
+    \item 精度悪め。
+    \item 天候に左右されない。
+    \item 東北大天文の屋上望遠鏡のドームにもフラット盤があるので確認してみて欲しい。
+  \end{itemize}
+  \item 雲
+  \begin{itemize}
+    \item 雲の散乱光を観測する。
+    \item 雲が一様に光っていると考え、雲の一部を観測する。
+    \item ドームフラットよりも精度が良い。
+  \end{itemize}
+  \item トワイライト
+  \begin{itemize}
+    \item 夕暮れ時、明け方に撮る。
+    \item 太陽が沈む、または昇る時の、明るすぎない時の空を観測する。
+  \end{itemize}
+\end{itemize}
+
+今回はこの中でも、処理がより簡単なドームフラットを扱うことにします。ドームフラットの工程は次の通りです。
+\begin{enumerate}[(1)]
+  \item ランプONのドームフラットの平均画像を作成する。
+  \item ランプOFFのドームフラットの平均画像を作成する。
+  \item ONからOFFを引いた画像を作成する。
+  \item この画像を規格化する。
+\end{enumerate}
+
+\subsubsection{スカイ引き}
+
 
 \section{分光データ解析} %%
 \label{sect:spec_ana}
