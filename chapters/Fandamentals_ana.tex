@@ -53,7 +53,7 @@ CCDカメラなどの検出機は、多数の素子によって構成されて�
 \end{verbatim}
 
 また、解析コードとして\texttt{initial\_data\_reduction.py}と\texttt{photometry.py}が付属しています。まずは\texttt{initial\_data\_reduction.py}の内容を扱います。\par
-解析にさきだって、今回扱う生データを見てみましょう。
+解析にさきだって、今回扱う生データを見てみましょう。図~\ref{fig:raw_data}です。
 \begin{figure}
 	\centering
 	\subfigure[]{%
@@ -108,25 +108,34 @@ CCDカメラなどの検出機は、多数の素子によって構成されて�
 まずは準備として、必要なモジュールをimportします。次のコードを実行してください。
 \begin{lstlisting}[caption=モジュールのimport, label=code:import]
   import os
+  import re
   import numpy as np
   import astropy.io.fits as fits
   import glob
+  import matplotlib.pyplot as plt
   import aplpy
 
   # create a directory if that directory does not exist
   def my_makedirs(path):
       if not os.path.isdir(path):
           os.makedirs(path)
-
   my_makedirs('./out')
+
+
+  # functions for the function "sorted()"
+  def atoi(text):
+      return int(text) if text.isdigit() else text
+  def natural_keys(text):
+      return [ atoi(c) for c in re.split(r'(\d+)', text) ]
 \end{lstlisting}
 \texttt{import}から始まる文が今回の1次処理で使用するモジュール類です。また、引数として取った文字列を名前として持つディレクトリが存在しない場合に、ディレクトリを作成する関数\texttt{my\_makedirs}を作り、\texttt{out}というディレクトリを作成しました。これから出力される\texttt{.fits}ファイルは全てここに保存するようにします。\par
+また、\texttt{sorted}という関数をこの後に使用するため、この関数を使用するのに必要な関数を2つ定義しています。\par
 次にダーク画像を作成します。ダークは複数回撮ることが一般的なので、それらを全て結合する必要があります。今回は5枚とってあるので、それらを結合します。処理としては次のようになります。
 \begin{lstlisting}[caption=ダーク画像の作成, label=code:mk_dark]
   # dark
   ## merge the dark images
   dark_images = np.empty((0, 1024, 1024))
-  dark_fits = glob.glob('./dark/*.fits')
+  dark_fits = sorted(glob.glob('./dark/*.fits'), key=natural_keys)
   for data in dark_fits:
       dark = fits.getdata(data)
       dark_images = np.append(dark_images, dark[np.newaxis, :], axis=0)
@@ -166,7 +175,7 @@ CCDカメラなどの検出機は、多数の素子によって構成されて�
 \begin{lstlisting}[caption=生データからダークを引く, label=code:darkhiki]
   ## subtract the dark data from raw data
   dark = fits.getdata('./out/dark.fits')
-  raw_fits = glob.glob('./raw/*.fits')
+  raw_fits = sorted(glob.glob('./raw/*.fits'), key=natural_keys)
   for i,data in enumerate(raw_fits):
       raw_image = fits.getdata(data)
       sub_dark = raw_image - dark
@@ -179,15 +188,10 @@ CCDカメラなどの検出機は、多数の素子によって構成されて�
 \end{align}
 となっているはずです。ここで注意しなければならないのは、ダークにも検出機の素子の感度の違いがのってしまっていることです。できた画像を表示してみます。
 \begin{lstlisting}[caption=ダーク引き済み画像の表示, label=code:darked_fig]
-  dir_images = glob.glob('./out/dir_*.fits')
+  dir_images = sorted(glob.glob('./out/dir_*.fits'), key=natural_keys)
   for i,data in enumerate(dir_images):
       img = fits.open(data)
       pic = aplpy.FITSFigure(img)
-      pic.add_grid()
-      pic.grid.set_color('white')
-      pic.grid.set_alpha(0.8)
-      pic.grid.set_linestyle('solid')
-      pic.grid.set_linewidth(1)
       pic.show_grayscale()
       img_name = 'fig_dir_' + str('{:02d}'.format(i)) + '.pdf'
       pic.save('./fig/' + img_name)
@@ -247,7 +251,7 @@ CCDカメラなどの検出機は、多数の素子によって構成されて�
   \item ドームフラット
   \begin{itemize}
     \item フラット盤に一様光を反射させる。
-    \item dome\_flat\_offはライトを消したもの。dome\_flat\_onはライトをつけたもの。
+    \item 「ライトをつけた状態で撮ったもの」から「ライトを消した状態で撮ったもの」を引けばフラット画像から熱雑音成分が消せる。
     \item 精度悪め。
     \item 天候に左右されない。
     \item 東北大天文の屋上望遠鏡のドームにもフラット盤があるので確認してみて欲しい。
@@ -273,8 +277,291 @@ CCDカメラなどの検出機は、多数の素子によって構成されて�
   \item この画像を規格化する。
 \end{enumerate}
 
-\subsubsection{スカイ引き}
+まずはランプONのドームフラットの平均画像を作成します。ダークのときと同様に、画像を結合させれば良いので、
+\begin{lstlisting}[caption=ランプONのフラット画像, label=code:flat_light_on]
+  # flat
+  ## create the flat image
+  ### light on
+  light_on = np.empty((0, 1024, 1024))
+  light_on_fits = sorted(glob.glob('./flat/*.fits'), key=natural_keys)
+  for data in light_on_fits:
+      light_on_image = fits.getdata(data)
+      light_on = np.append(light_on, light_on_image[np.newaxis, :], axis=0)
 
+  median_light_on = np.median(light_on, axis=0)
+\end{lstlisting}
+とします。
+
+また、ランプOFFの画像ですが、これは作成の仕方からわかるように、これはダーク画像と同等のものなので、今回はダーク画像をランプOFFの画像として扱いましょう。
+\begin{lstlisting}[caption=ランプOFFのフラット画像とフラット画像の作成, label=code:flat_light_off]
+  ### identify the median dark image as the flat off image
+  flat_image = median_light_on - median_dark
+\end{lstlisting}
+
+出来上がったflat画像を規格化します。規格化について説明する前に、コード~\ref{code:normalize}を先に示します。
+\begin{lstlisting}[caption=フラット画像の規格化,label=code_3_4_4]
+  ## normalize the flat image
+  median = np.median(flat_image)
+  stddev = np.std(flat_image)
+  normalized = np.where(flat_image/median < 0.001, 9999, flat_image/median)
+  fits.writeto('./out/flat.fits', normalized, overwrite=True)
+\end{lstlisting}
+要するに規格化とは、死んだ素子を除外することです。「ONからOFFを引いた画像」で値が極端に小さくなってしまっている素子、具体的には
+\begin{verbatim}on_minus_off/median < 0.001\end{verbatim}
+であるような素子の情報は、一様に削ぎ落としてしまいたいものです。そこで、flat画像のその素子の値に$9999$という極端な値を入れてしまいます。後でデータをflatで割るのですが、極端に大きな値で割ってしまえば、その素子のデータは極端に0に限りなく近い値となって、無視できるようになるという原理です。ここで作成されたflat画像が図~\ref{fig:flat}です。
+\begin{figure}
+  \centering
+	\includegraphics[width=0.6\linewidth]{./fig/chap_5/flat_fits.pdf}
+	\caption{フラット画像}
+  \label{fig:flat}
+\end{figure}
+
+では、作成したflat画像でデータを割る作業に移ります。割るという作業も単純な演算で、
+\begin{lstlisting}[caption=フラット割り,label=code:flatting]
+  ## flat the images
+  dir_images = sorted(glob.glob('./out/dir_*.fits'), key=natural_keys)
+  for i, data in enumerate(dir_images):
+      img = fits.getdata(data)
+      flat = img/normalized
+      file_name = 'fdir_' + str('{:02d}'.format(i)) + '.fits'
+      fits.writeto('./out/' + file_name, flat, overwrite=True)
+\end{lstlisting}
+となります。ここまでの作業が完了したfdir画像を表示してみると図~\ref{fig:flatted}のようになります。よくみると画像に模様のようなものがうっすらと入っています。これは次のスカイ引きの処理で取り除くものなので、ここでは問題ありません。
+\begin{figure}
+	\centering
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_fdir_00.pdf}%
+	\label{fig:flatted_figs_0}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_fdir_01.pdf}%
+	\label{fig:flatted_figs_1}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_fdir_02.pdf}%
+	\label{fig:flatted_figs_2}%
+	}
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_fdir_03.pdf}%
+	\label{fig:flatted_figs_3}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_fdir_04.pdf}%
+	\label{fig:flatted_figs_4}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_fdir_05.pdf}%
+	\label{fig:flatted_figs_5}%
+	}
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_fdir_06.pdf}%
+	\label{fig:flatted_figs_6}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_fdir_07.pdf}%
+	\label{fig:flatted_figs_7}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_fdir_08.pdf}%
+	\label{fig:flatted_figs_8}%
+	}
+	\caption{フラットフィールディング済みの画像}
+	\label{fig:flatted}
+\end{figure}
+
+\subsubsection{スカイ引き}
+1次処理の最後はスカイ引きの処理に入ります。スカイ画像は、感度補正が終わった全ての画像を重ねて、その中央値をとれば作成できます。
+\begin{lstlisting}[caption=スカイ画像の作成,label=code:sky_image]
+  # sky
+  ## create the sky image
+  sky_images = np.empty((0, 1024, 1024))
+  fdir_images = sorted(glob.glob('./out/fdir_*.fits'), key=natural_keys)
+  for data in fdir_images:
+      sky = fits.getdata(data)
+      sky_images = np.append(sky_images, sky[np.newaxis, :], axis=0)
+  
+  median_sky = np.median(sky_images, axis=0)
+  fits.writeto('./out/sky.fits', median_sky, overwrite=True)
+\end{lstlisting}
+
+できたスカイ画像が図~\ref{fig:sky_image}のようになります。星が消えて、模様のようなものだけ見えています。
+\begin{figure}
+  \centering
+  \includegraphics[width=0.6\linewidth]{./fig/chap_5/sky_fits.pdf}
+  \caption{スカイ画像}
+  \label{fig:sky_image}
+\end{figure}
+ここではダーク引きと同様に単純に引くだけなので、
+\begin{lstlisting}[caption=スカイ引き,label=code:subtract_sky]
+  ## subtract the sky data from fdir data
+  for i, data in enumerate(fdir_images):
+      img = fits.getdata(data)
+      sub_sky = img - median_sky
+      file_name = 'sfdir_' + str('{:02d}'.format(i)) + '.fits'
+      fits.writeto('./out/' + file_name, sub_sky, overwrite=True)
+\end{lstlisting}
+となります。ここでも例によって、「s」をつけてスカイ引き済みという意味にしています。
+できた画像を表示させてみます。コード的には次のようにします。
+\begin{lstlisting}[caption=作成した画像の表示,label=code:kansei]
+  sfdir_images = sorted(glob.glob('./out/sfdir_*.fits'), key=natural_keys)
+  for i,data in enumerate(sfdir_images):
+      img = fits.open(data)
+      pic = aplpy.FITSFigure(img)
+      pic.show_grayscale()
+      img_name = 'fig_' + str('{:02d}'.format(i)) + '.pdf'
+      pic.save('./fig/' + img_name)
+\end{lstlisting}
+
+これで表示される画像は図~\ref{fig:skyed}です。
+\begin{figure}
+	\centering
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_00.pdf}%
+	\label{fig:skyed_figs_0}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_01.pdf}%
+	\label{fig:skyed_figs_1}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_02.pdf}%
+	\label{fig:skyed_figs_2}%
+	}
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_03.pdf}%
+	\label{fig:skyed_figs_3}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_04.pdf}%
+	\label{fig:skyed_figs_4}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_05.pdf}%
+	\label{fig:skyed_figs_5}%
+	}
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_06.pdf}%
+	\label{fig:skyed_figs_6}%
+	}%
+	\subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_07.pdf}%
+	\label{fig:skyed_figs_7}%
+	}%
+  \subfigure[]{%
+	\includegraphics[width=.333\textwidth,clip]{./fig/chap_5/fig_08.pdf}%
+	\label{fig:skyed_figs_8}%
+	}
+	\caption{sky引きまでの処理が終わった画像}
+	\label{fig:skyed}
+\end{figure}
+変な模様が消えたので、綺麗な画像になっているのがわかります。これで1次処理は終わりです。
+
+\subsubsection{1次処理のまとめ}
+ここまでで行った1次処理の解析コードをまとめます。実行的には、\texttt{raw}に観測の生データ、\texttt{dark}にダークのデータ、\texttt{flat}にフラット画像を作る際のライトオンのデータを入れてしまえば、以下のコードを走らせるだけで1次処理が完了します\footnote{ただし、2021年度のもし天のように、データ自体に不具合が生じている場合、例えば生データ取得時とフラットデータ取得時でCCDの角度が異なっているなどした時には、画像を回転させるなどの処置が必要になります。当日そのような事態におちいると非常に焦るので、あらかじめどのような不具合が想定されるかどうか考えておくとよいかもしれません。}。
+\begin{lstlisting}[caption=1次処理のまとめ,label=code:itizisyori]
+  import os
+  import re
+  import numpy as np
+  import astropy.io.fits as fits
+  import glob
+  import matplotlib.pyplot as plt
+  import aplpy
+
+  # create a directory if that directory does not exist
+  def my_makedirs(path):
+      if not os.path.isdir(path):
+          os.makedirs(path)
+  my_makedirs('./out')
+
+
+  # functions for the function "sorted()"
+  def atoi(text):
+      return int(text) if text.isdigit() else text
+  def natural_keys(text):
+      return [ atoi(c) for c in re.split(r'(\d+)', text) ]
+
+
+  # dark
+  ## merge the dark images
+  dark_images = np.empty((0, 1024, 1024)) 
+  dark_fits = sorted(glob.glob('./dark/*.fits'), key=natural_keys)
+  for data in dark_fits:
+      dark = fits.getdata(data)
+      dark_images = np.append(dark_images, dark[np.newaxis, :], axis=0)
+
+  median_dark = np.median(dark_images, axis=0)
+  fits.writeto('./out/dark.fits', median_dark, overwrite=True)
+
+  ## subtract the dark data from raw data
+  dark = fits.getdata('./out/dark.fits')
+  raw_fits = sorted(glob.glob('./raw/*.fits'), key=natural_keys)
+  for i,data in enumerate(raw_fits):
+      raw_image = fits.getdata(data)
+      sub_dark = raw_image - dark
+      file_name = 'dir_' + str('{:02d}'.format(i)) + '.fits'
+      fits.writeto('./out/' + file_name, sub_dark, overwrite=True)
+
+
+  # flat
+  ## create the flat images
+  ### light on
+  light_on = np.empty((0, 1024, 1024))
+  light_on_fits = sorted(glob.glob('./flat/*.fits'), key=natural_keys)
+  for data in light_on_fits:
+      light_on_image = fits.getdata(data)
+      light_on = np.append(light_on, light_on_image[np.newaxis, :], axis=0)
+
+  median_light_on = np.median(light_on, axis=0)
+
+  ### identify the median dark image as the flat off image
+  flat_image = median_light_on - median_dark
+
+  ## normalize the flat image
+  median = np.median(flat_image)
+  stddev = np.std(flat_image)
+  normalized = np.where(flat_image/median < 0.001, 9999, flat_image/median)
+  fits.writeto('./out/flat.fits', normalized, overwrite=True)
+
+  ## flat the images
+  dir_images = sorted(glob.glob('./out/dir_*.fits'), key=natural_keys)
+  print(dir_images)
+  for i, data in enumerate(dir_images):
+      img = fits.getdata(data)
+      flat = img/normalized
+      file_name = 'fdir_' + str('{:02d}'.format(i)) + '.fits'
+      fits.writeto('./out/' + file_name, flat, overwrite=True)
+
+
+  # sky
+  ## create the sky image
+  sky_images = np.empty((0, 1024, 1024))
+  fdir_images = sorted(glob.glob('./out/fdir_*.fits'), key=natural_keys)
+  for data in fdir_images:
+      sky = fits.getdata(data)
+      sky_images = np.append(sky_images, sky[np.newaxis, :], axis=0)
+
+  median_sky = np.median(sky_images, axis=0)
+  fits.writeto('./out/sky.fits', median_sky, overwrite=True)
+
+  ## subtract the sky data from fdir data
+  for i, data in enumerate(fdir_images):
+      img = fits.getdata(data)
+      sub_sky = img - median_sky
+      file_name = 'sfdir_' + str('{:02d}'.format(i)) + '.fits'
+      fits.writeto('./out/' + file_name, sub_sky, overwrite=True)
+
+  # visualize the image
+  my_makedirs('./fig')
+  sfdir_images = sorted(glob.glob('./out/sfdir_*.fits'), key=natural_keys)
+  for i,data in enumerate(sfdir_images):
+      img = fits.open(data)
+      pic = aplpy.FITSFigure(img)
+      pic.show_grayscale()
+      img_name = 'fig_' + str('{:02d}'.format(i)) + '.pdf'
+      pic.save('./fig/' + img_name)
+\end{lstlisting}
+
+\subsubsection{測光処理（2次処理）}
 
 \section{分光データ解析} %%
 \label{sect:spec_ana}
