@@ -299,7 +299,7 @@ CCDカメラなどの検出機は、多数の素子によって構成されて�
 \end{lstlisting}
 
 出来上がったflat画像を規格化します。規格化について説明する前に、コード~\ref{code:normalize}を先に示します。
-\begin{lstlisting}[caption=フラット画像の規格化,label=code_3_4_4]
+\begin{lstlisting}[caption=フラット画像の規格化,label=code:flatted]
   ## normalize the flat image
   median = np.median(flat_image)
   stddev = np.std(flat_image)
@@ -368,6 +368,13 @@ CCDカメラなどの検出機は、多数の素子によって構成されて�
 	\caption{フラットフィールディング済みの画像}
 	\label{fig:flatted}
 \end{figure}
+
+この作業によって素子ごとの感度の違いが補正され、
+\begin{align*}
+  (\text{生データ}) &\xrightarrow{\text{ダーク引き}} (感度の違い)\times\left\{ (真の天体信号) + (夜光などの雑音) \right\} \\
+  &\xrightarrow{\text{フラットフィールディング}} \left\{ (真の天体信号) + (夜光などの雑音) \right\}
+\end{align*}
+となりました。
 
 \subsubsection{スカイ引き}
 1次処理の最後はスカイ引きの処理に入ります。スカイ画像は、感度補正が終わった全ての画像を重ねて、その中央値をとれば作成できます。
