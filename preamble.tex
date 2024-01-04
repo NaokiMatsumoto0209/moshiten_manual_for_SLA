@@ -5,40 +5,73 @@
 
 %package類
 %%%%%%%%%%%%%%%%%%%%
-\usepackage[utf8]{inputenc} % エンコーディングが UTF8 であることを明示する。
-%\usepackage[deluxe]{otf}
-% OTF フォントを使えるようにし、複数のウェイトも使用可能にする。
-% これがないと、Mac のヒラギノ環境で使われる角ゴが太すぎてみっともない。
+\usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-% OT1→T1に変更し、ウムラウトなどを PDF 出力で合成文字ではなくす
-\usepackage[prefernoncjk]{pxcjkcat} % アクセントつきラテン文字を欧文扱いにする
-% uplatex の場合に必要な処理
-\usepackage[scaled=1.05,helvratio=0.95]{newtxtext}
-% Helvetica と Times を sf と rm のそれぞれで使う。
-% default だとバランスが悪いので、日本語に合わせて文字の大きさを調整する。
-\usepackage[dvipdfmx]{color} % 色
-\usepackage[colorlinks=true,allcolors=blue]{hyperref}
-%\usepackage{hyperref} % 紙に印刷するときは青文字リンクは消す。
-\usepackage{pxjahyper} % 文字化け防止
-\usepackage{array,amsmath,amssymb,bm,cases} % 数式でよく使うもの
-\usepackage[dvipdfmx]{graphicx} % 画像使用
-\usepackage{url}
-%\usepackage{natbib}
-\usepackage[numbers]{natbib} % bibliographystyleを「jplain」にした時、エラーが出るならこちらを試す
-\usepackage{ascmac} % itembox環境
-\usepackage{enumerate} % enumerate環境
-
-% bibliography を目次に追加
+\usepackage[prefernoncjk]{pxcjkcat}
+\usepackage[scaled=1.05,helvratio=1.0]{newtxtext}
+\usepackage[dvipdfmx]{color}
+\usepackage[dvipsnames]{xcolor}
+%\usepackage[colorlinks=true,allcolors=blue]{hyperref}
+\usepackage[dvipdfmx,hidelinks]{hyperref}
+\usepackage{pxjahyper} 
+\usepackage{array,amsmath,amssymb,bm,cases} 
+\usepackage{graphicx} 
+\usepackage{url} 
+\usepackage{natbib}
+\usepackage{ascmac} 
+\usepackage{enumerate}
 \usepackage[nottoc,notlot,notlof]{tocbibind}
-
-%\usepackage{mathtools}%dcases環境
-
+%\usepackage{mathtools}
 \usepackage[nooneline]{subfigure}
-\subfiguretopcaptrue
+\subfiguretopcaptrue 
+\usepackage{tcolorbox}
 
-%\usepackage{comment}
+\usepackage{niceframe}
 
-\allowdisplaybreaks[4] % 数式がページをまたがることを許す
+\usepackage{amsthm}
+\theoremstyle{definition}
+\newtheorem{exmp}{練習問題}[chapter]
+
+\allowdisplaybreaks[4] 
+
+%%%%%%%%%%%%%%%%%%%%
+\newcommand{\bs}{\symbol{92}} %backslash
+\newcommand{\red}[1]{\textcolor{red}{#1}} %文字色赤
+\newcommand{\blue}[1]{\textcolor{blue}{#1}} %文字色青
+\newcommand{\green}[1]{\textcolor{green}{#1}} %文字色緑
+\newcommand{\rb}[1]{\textcolor{RoyalBlue}{#1}}
+\newcommand{\ro}[1]{\textcolor{RedOrange}{#1}}
+\newcommand{\ured}[1]{\textcolor{red}{\underline{\textcolor{black}{#1}}}} %下線赤
+\newcommand{\ugreen}[1]{\textcolor{green}{\underline{\textcolor{black}{#1}}}} %下線緑
+\newcommand{\ublue}[1]{\textcolor{blue}{\underline{\textcolor{black}{#1}}}} %下線青
+\newcommand\adndt{Atomic Data and Nuclear Data Tables}
+\newcommand\Annual{Annual Review of Nuclear and Particle Science}
+\newcommand\aj{The Astronomical Journal}
+\newcommand\aap{\rm{A\&A}}
+\newcommand\apj{\rm{ApJ}}
+\newcommand\apjl{\rm{ApJ, Letter}}
+\newcommand\apjs{\rm{ApJ, Supplement}}
+\newcommand\araa{\rm{Annual Review of A\& A}}
+\newcommand\arxiv{\rm{arXiv e-prints}}
+\newcommand\mnras{\rm{MNRAS}}
+%\newcommand\Nature{Nature Communications}
+\newcommand\Nature{\rm{Nature}}
+\newcommand\nat{\rm{Nature}}
+\newcommand\nds{Nuclear Data Sheets}
+%\newcommand\Science{Science communication}
+\newcommand\pasp{PASP}
+\newcommand\physrep{Physics Reports}
+\newcommand\prl{Physical Review Letters}
+\newcommand\rpp{Reports on Progress in Physics}
+\newcommand\Science{\rm{Science}}
+\newcommand\ssr{Space Science Reviews}
+\newcommand\prd{Physical Review D}
+\newcommand\pasj{\rm{PASJ}}
+\newcommand\sovast{Soviet Astronomy}
+\newcommand\aaps{Astronomy and Astrophysics Supplement}
+\newcommand\physscr{Physica Scripta}
+\newcommand\jqsrt{Journal of Quantitative Spectroscopy \& Radiative Transfer}
+%%%%%%%%%%%%%%%%%%%%
 
 \usepackage{listings,jvlisting}
 %ここからソースコードの表示に関する設定
@@ -62,46 +95,36 @@
 }
 %ここまでソースコードの表示に関する設定
 
-% latexdiff
-% 実際の修論には入れる必要なし
-%DIF PREAMBLE EXTENSION ADDED BY LATEXDIFF
-%DIF UNDERLINE PREAMBLE %DIF PREAMBLE
-\RequirePackage[normalem]{ulem} %DIF PREAMBLE
-\RequirePackage{color}\definecolor{RED}{rgb}{1,0,0}\definecolor{BLUE}{rgb}{0,0,1} %DIF PREAMBLE
-\providecommand{\MyDIFadd}[1]{{\protect\color{blue}\uwave{#1}}} %DIF PREAMBLE
-\providecommand{\MyDIFdel}[1]{{\protect\color{red}\sout{#1}}}                      %DIF PREAMBLE
-%DIF SAFE PREAMBLE %DIF PREAMBLE
-\providecommand{\MyDIFaddbegin}{} %DIF PREAMBLE
-\providecommand{\MyDIFaddend}{} %DIF PREAMBLE
-\providecommand{\MyDIFdelbegin}{} %DIF PREAMBLE
-\providecommand{\MyDIFdelend}{} %DIF PREAMBLE
-%DIF FLOATSAFE PREAMBLE %DIF PREAMBLE
-\providecommand{\MyDIFaddFL}[1]{\MyDIFadd{#1}} %DIF PREAMBLE
-\providecommand{\MyDIFdelFL}[1]{\MyDIFdel{#1}} %DIF PREAMBLE
-\providecommand{\MyDIFaddbeginFL}{} %DIF PREAMBLE
-\providecommand{\MyDIFaddendFL}{} %DIF PREAMBLE
-\providecommand{\MyDIFdelbeginFL}{} %DIF PREAMBLE
-\providecommand{\MyDIFdelendFL}{} %DIF PREAMBLE
-%DIF END PREAMBLE EXTENSION ADDED BY LATEXDIFF
 
+\makeatletter
 
-%%%%%%%%%%%%%%%%%%%%
+\newcommand{\subtitle}[1]{\def\@subtitle{#1}}
+\renewcommand{\and}{\\}
+\renewcommand{\maketitle}{
+  \thispagestyle{empty}
+  \mbox{}
+  \vfill
+  \noindent{\Huge\bf \@title}\\
+  \rule{\textwidth}{3pt}
+  \begin{flushright}
+    \vskip -3mm
+    \Large{\@subtitle}\\
+    \Large{\@date}
+  \end{flushright}
+  \vfill
+  \begin{center}%
+  \includegraphics[width=0.98\linewidth]{fig/moshiten.pdf}
+  \end{center}%
+  \begin{flushleft}
+    \bf\LARGE
+    \@author
+  \end{flushleft}
+  \vskip -5mm\rule{\textwidth}{2pt}
+  \cleardoublepage
+}
+\makeatother
 
-%newcommand類
-%%%%%%%%%%%%%%%%%%%%
-\newcommand{\bs}{\symbol{92}} %backslash
-\newcommand{\red}[1]{\textcolor{red}{#1}} %文字色赤
-\newcommand{\blue}[1]{\textcolor{blue}{#1}} %文字色青
-\newcommand{\green}[1]{\textcolor{green}{#1}} %文字色緑
-\newcommand{\ured}[1]{\textcolor{red}{\underline{\textcolor{black}{#1}}}} %下線赤
-\newcommand{\ublue}[1]{\textcolor{blue}{\underline{\textcolor{black}{#1}}}} %下線青
-\newcommand{\ugreen}[1]{\textcolor{green}{\underline{\textcolor{black}{#1}}}} %下線緑
-%%%%%%%%%%%%%%%%%%%%
-
-%%ここからを自分で書く
-%%%%%%%%
-\title{もし天における天体観測と解析のすすめ}
-\date{\today} %日付
-\author{東北大天文学部生SLA一同} %名前
-%%%%%%%%
-%%ここまでを自分で書く
+\makeatletter
+\@addtoreset{equation}{section}
+\def\theequation{\thesection.\arabic{equation}}
+\makeatother

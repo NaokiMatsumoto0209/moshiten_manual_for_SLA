@@ -1,7 +1,12 @@
 \RequirePackage{plautopatch}
-\documentclass[twoside,openright,a4paper,papersize,uplatex,12pt,dvipdfmx]{jsbook}
+\documentclass[twoside,openright,a4paper,papersize,uplatex,10pt,dvipdfmx]{jsbook}
 
 \input{preamble}
+
+\title{もし天における天体観測と解析のすすめ}
+\subtitle{2023年度版}
+\date{2023年12月22日-28日}
+\author{東北大学もし天SLA\,解析班一同}
 
 \begin{document}
 
@@ -24,7 +29,8 @@
 \include{chapters/Fandamentals_disc}
 \include{chapters/Conclusion}
 
-\bibliographystyle{jplain}
+\renewcommand{\bibname}{参考文献}
+\bibliographystyle{jecon}
 \bibliography{library}
 \label{page:bib}
 
